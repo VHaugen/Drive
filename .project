@@ -3,6 +3,8 @@
 	<name>Drive</name>
 	<comment></comment>
 	<projects>
+		<project>Src_vl</project>
+		<project>vl</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
@@ -39,4 +41,11 @@
 		<nature>org.eclipse.cdt.managedbuilder.core.managedBuildNature</nature>
 		<nature>org.eclipse.cdt.managedbuilder.core.ScannerConfigNature</nature>
 	</natures>
+	<linkedResources>
+		<link>
+			<name>vl</name>
+			<type>2</type>
+			<location>/home/haugen/dev/Drive/Core/Inc/vl</location>
+		</link>
+	</linkedResources>
 </projectDescription>
