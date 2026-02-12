@@ -1,0 +1,15 @@
+../Core/Inc/mpu-xxx0.h:74:9:MPU_begin	3
+../Core/Inc/mpu-xxx0.h:110:6:MPU_writeAccFullScaleRange	5
+../Core/Inc/mpu-xxx0.h:149:6:MPU_writeGyroFullScaleRange	5
+../Core/Inc/mpu-xxx0.h:187:6:MPU_readRawData	1
+../Core/Inc/mpu-xxx0.h:208:6:MPU_calibrateGyro	3
+../Core/Inc/mpu-xxx0.h:239:6:MPU_readProcessedData	1
+../Core/Inc/mpu-xxx0.h:262:6:MPU_calcAttitude	1
+../Core/Src/main.c:79:5:main	1
+../Core/Src/main.c:162:6:SystemClock_Config	3
+../Core/Src/main.c:209:13:MX_I2C1_Init	2
+../Core/Src/main.c:243:13:MX_SPI1_Init	2
+../Core/Src/main.c:281:13:MX_TIM11_Init	2
+../Core/Src/main.c:312:13:MX_USART2_UART_Init	2
+../Core/Src/main.c:345:13:MX_GPIO_Init	1
+../Core/Src/main.c:389:6:Error_Handler	1
