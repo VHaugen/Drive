@@ -21,10 +21,12 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "platform.h"
 #include "ili9488.h"
 #include "mpu-xxx0.h"
 #include "string.h"
 #include "stdio.h"
+#include "vl53l7cx_api.h"
 
 /* USER CODE END Includes */
 
@@ -53,6 +55,14 @@ TIM_HandleTypeDef htim11;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+#define is_interrupt 0
+int status;
+volatile int IntCount;
+uint8_t p_data_ready;
+VL53L7CX_Configuration 	Dev;
+VL53L7CX_ResultsData 	Results;
+uint8_t resolution, isAlive;
+uint16_t idx;
 
 /* USER CODE END PV */
 
@@ -70,6 +80,16 @@ static void MX_SPI1_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+void get_data_by_polling(VL53L7CX_Configuration *p_dev);
+void get_data_by_interrupt(VL53L7CX_Configuration *p_dev);
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	if (GPIO_Pin==vl_int_Pin)
+	{
+		IntCount++;
+	}
+}
 /* USER CODE END 0 */
 
 /**
@@ -137,6 +157,42 @@ int main(void)
 
  int i = 0;
  char buffer[32];
+	Dev.platform.address = VL53L7CX_DEFAULT_I2C_ADDRESS;
+//	HAL_GPIO_WritePin(I2C_RST_C_GPIO_Port, I2C_RST_C_Pin, GPIO_PIN_RESET);
+//	HAL_Delay(20);
+//	HAL_GPIO_WritePin(PWR_EN_C_GPIO_Port, PWR_EN_C_Pin, GPIO_PIN_RESET);
+//	HAL_Delay(20);
+//	HAL_GPIO_WritePin(LPn_C_GPIO_Port, LPn_C_Pin, GPIO_PIN_RESET);
+//	HAL_Delay(20);
+//	HAL_GPIO_WritePin(PWR_EN_C_GPIO_Port, PWR_EN_C_Pin, GPIO_PIN_SET);
+//	HAL_Delay(20);
+//	HAL_GPIO_WritePin(LPn_C_GPIO_Port, LPn_C_Pin, GPIO_PIN_SET);
+	status = vl53l7cx_is_alive(&Dev, &isAlive);
+	if(!isAlive)
+	{
+		//printf("VL53L7CX not detected at requested address (0x%x)\n", Dev.platform.address);
+		 char bbaddmpu[] = "VL53L7CX not detected at requested address (0x%x)\n";
+
+		 HAL_UART_Transmit(&huart2, bbaddmpu, strlen((char *)badmpu), 0xFFFF);
+		return 255;
+	}
+	char bdddmpu[] = "Sensor initializing, please wait few seconds\n\r";
+
+	 HAL_UART_Transmit(&huart2, bdddmpu, strlen((char *)badmpu), 0xFFFF);
+	//printf("Sensor initializing, please wait few seconds\n");
+	status = vl53l7cx_init(&Dev);
+	status = vl53l7cx_set_ranging_frequency_hz(&Dev, 2);				// Set 2Hz ranging frequency
+	status = vl53l7cx_set_ranging_mode(&Dev, VL53L7CX_RANGING_MODE_CONTINUOUS);  // Set mode continuous
+
+	printf("Ranging starts\n");
+	status = vl53l7cx_start_ranging(&Dev);
+
+	if (is_interrupt) {
+			get_data_by_interrupt(&Dev);
+		}
+		else {
+			get_data_by_polling(&Dev);
+		}
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -258,7 +314,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -350,14 +406,48 @@ static void MX_GPIO_Init(void)
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, TFT_RST_Pin|LED_Pin|TFT_DC_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(i2c_rst_GPIO_Port, i2c_rst_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(pwr_en_GPIO_Port, pwr_en_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, lpn_Pin|TFT_RST_Pin|LED_Pin|TFT_DC_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(TFT_CS_GPIO_Port, TFT_CS_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin : vl_int_Pin */
+  GPIO_InitStruct.Pin = vl_int_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(vl_int_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : i2c_rst_Pin */
+  GPIO_InitStruct.Pin = i2c_rst_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(i2c_rst_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : pwr_en_Pin */
+  GPIO_InitStruct.Pin = pwr_en_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(pwr_en_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : lpn_Pin */
+  GPIO_InitStruct.Pin = lpn_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(lpn_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : TFT_RST_Pin LED_Pin TFT_DC_Pin */
   GPIO_InitStruct.Pin = TFT_RST_Pin|LED_Pin|TFT_DC_Pin;
@@ -379,6 +469,68 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void get_data_by_interrupt(VL53L7CX_Configuration *p_dev){
+	do
+	{
+		__WFI();	// Wait for interrupt
+		if(IntCount !=0 ){
+			IntCount=0;
+			status = vl53l7cx_get_resolution(p_dev, &resolution);
+			status = vl53l7cx_get_ranging_data(p_dev, &Results);
+
+			for(int i = 0; i < resolution;i++){
+				/* Print per zone results */
+				printf("Zone : %2d, Nb targets : %2u, Ambient : %4lu Kcps/spads, ",
+						i,
+						Results.nb_target_detected[i],
+						Results.ambient_per_spad[i]);
+
+				/* Print per target results */
+				if(Results.nb_target_detected[i] > 0){
+					printf("Target status : %3u, Distance : %4d mm\n",
+							Results.target_status[VL53L7CX_NB_TARGET_PER_ZONE * i],
+							Results.distance_mm[VL53L7CX_NB_TARGET_PER_ZONE * i]);
+				}else{
+					printf("Target status : 255, Distance : No target\n");
+				}
+			}
+			printf("\n");
+		}
+	}while(1);
+}
+
+
+void get_data_by_polling(VL53L7CX_Configuration *p_dev){
+	do
+	{
+		status = vl53l7cx_check_data_ready(&Dev, &p_data_ready);
+		if(p_data_ready){
+			status = vl53l7cx_get_resolution(p_dev, &resolution);
+			status = vl53l7cx_get_ranging_data(p_dev, &Results);
+
+			for(int i = 0; i < resolution;i++){
+				/* Print per zone results */
+				printf("Zone : %2d, Nb targets : %2u, Ambient : %4lu Kcps/spads, ",
+						i,
+						Results.nb_target_detected[i],
+						Results.ambient_per_spad[i]);
+
+				/* Print per target results */
+				if(Results.nb_target_detected[i] > 0){
+					printf("Target status : %3u, Distance : %4d mm\n",
+							Results.target_status[VL53L7CX_NB_TARGET_PER_ZONE * i],
+							Results.distance_mm[VL53L7CX_NB_TARGET_PER_ZONE * i]);
+				}else{
+					printf("Target status : 255, Distance : No target\n");
+				}
+			}
+			printf("\n");
+		}else{
+			HAL_Delay(5);
+		}
+	}
+	while(1);
+}
 
 /* USER CODE END 4 */
 
